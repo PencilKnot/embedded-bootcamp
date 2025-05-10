@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -30,6 +31,11 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+#define ADC_BYTE_SIZE 3
+#define ADC_START_BIT 0x01
+#define ADC_CH0 0x80
+#define ADC_DUMMY_BIT 0x00
+#define MIN_DUTY_CYCLE 3277
 
 /* USER CODE END PTD */
 
@@ -45,7 +51,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+SPI_HandleTypeDef hspi1;
+TIM_HandleTypeDef htim1;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -65,6 +72,7 @@ void SystemClock_Config(void);
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -75,7 +83,10 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
+  /* duty cycle = how long signal stays HIGH
+   * compare register = de
+   * */
+  uint16_t value, dutyCycle;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -89,14 +100,23 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-
+  // Start timer
+  HAL_TIM_PWM_START(&htim1, TIM_CHANNEL_1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  value = RR_ADC();
+
+	  // 5% to 10% duty cycle (5% * 65535, etc.), 1023 = 10 bit
+	  dutyCycle = ((value * MIN_DUTY_CYCLE) / 1023) + MIN_DUTY_CYCLE;
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, dutyCycle);
+
+	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -124,6 +144,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -145,7 +166,22 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+// Read and receiving ADC signal
+uint16_t RR_ADC(){
+	// Start bit, config (1000 -> CH0), empty
+	uint8_t data[ADC_BYTE_SIZE] = {ADC_START_BIT, ADC_CH0, ADC_DUMMY_BIT};
 
+	// 10 bits are sent back (3 bytes)
+	uint8_t received[ADC_BYTE_SIZE];
+
+	// Pull CS to low, then send/receive data, then CS to high
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+	HAL_SPI_TransmitReceive(&hspi1, data, received, ADC_BYTE_SIZE, HAL_MAX_DELAY);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+
+	// Combine received into 10 bit output
+	return ((received[1] & 0x03) << 8) | received[2];
+}
 /* USER CODE END 4 */
 
 /**
@@ -179,5 +215,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

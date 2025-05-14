@@ -35,7 +35,7 @@
 #define ADC_START_BIT 0x01
 #define ADC_CH0 0x80
 #define ADC_DUMMY_BIT 0x00
-#define MIN_DUTY_CYCLE 3277
+#define MIN_DUTY_CYCLE 3200
 
 /* USER CODE END PTD */
 
@@ -112,7 +112,7 @@ int main(void)
   {
 	  value = RR_ADC();
 
-	  // 5% to 10% duty cycle (5% * 65535, etc.), 1023 = 10 bit
+	  // 5% to 10% duty cycle (5% * 63999, etc.), 1023 = 10 bit
 	  dutyCycle = ((value * MIN_DUTY_CYCLE) / 1023) + MIN_DUTY_CYCLE;
 	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, dutyCycle);
 
